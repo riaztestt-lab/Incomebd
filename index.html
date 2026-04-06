@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TK Income BD</title>
     
-    <script src="https://privilegedturmoilanew.com/6f/77/34/6f77345e70ab503e89dfa39ef72c9cd1.js"></script>
-    <script src="https://privilegedturmoilanew.com/b4/56/77/b45677b6da858a405fe18219565ec10d.js"></script>
-
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -83,7 +80,7 @@
                 <div class="card-bg p-8 rounded-[2.5rem] space-y-5">
                     <h2 class="text-2xl font-bold text-center">উইথড্র</h2>
                     <div class="bg-red-500/10 p-3 rounded-xl border border-red-500/20 text-center text-[11px] text-red-400">
-                        শর্ত: কমপক্ষে ৫টি রেফার থাকতে হবে। (আপনার রেফার: <span id="req-ref">0</span>/5)
+                        শর্ত: কমপক্ষে ১৫টি রেফার থাকতে হবে। (আপনার রেফার: <span id="req-ref">0</span>/15)
                     </div>
                     <select id="withdraw-method" class="w-full p-4 rounded-2xl outline-none">
                         <option value="Bkash">Bkash (Personal)</option>
@@ -125,7 +122,8 @@
     <div id="timer-overlay" class="fixed inset-0 bg-black/98 z-[200] hidden flex flex-col items-center justify-center p-8">
         <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"></div>
         <h3 id="timer-text" class="text-4xl font-black">30</h3>
-        <p class="text-gray-500 mt-2">অপেক্ষা করুন...</p>
+        <p class="text-gray-500 mt-2">অপেক্ষা করুন, টাস্ক সম্পন্ন হচ্ছে...</p>
+        <p class="text-red-500 text-[10px] mt-4 text-center">ব্যাক বাটন চাপবেন না বা অ্যাপ কাটবেন না!</p>
     </div>
 
     <script type="module">
@@ -245,16 +243,34 @@
             }
         }
 
+        // --- Task System with Verification ---
         window.startTask = (id, url) => {
+            if(!url || url === 'undefined') return alert("লিঙ্ক পাওয়া যায়নি!");
+            
             window.open(url, "_blank");
             const overlay = document.getElementById('timer-overlay');
             overlay.classList.remove('hidden');
+            
             let count = 30;
+            document.getElementById('timer-text').innerText = count;
+            
             const itv = setInterval(async () => {
-                count--; document.getElementById('timer-text').innerText = count;
+                count--; 
+                document.getElementById('timer-text').innerText = count;
+                
                 if(count <= 0) {
-                    clearInterval(itv); overlay.classList.add('hidden');
-                    await updateDoc(doc(db, "users", userData.uid), { balance: increment(50) });
+                    clearInterval(itv); 
+                    overlay.classList.add('hidden');
+                    
+                    // Legal verification check
+                    const isVerified = confirm("আপনি কি সঠিকভাবে সাইটটি ভিজিট করেছেন? ভুল তথ্য দিলে পেমেন্ট পাবেন না।");
+                    
+                    if(isVerified) {
+                        await updateDoc(doc(db, "users", userData.uid), { balance: increment(50) });
+                        alert("অভিনন্দন! আপনার ব্যালেন্স ৫০ টাকা যোগ হয়েছে।");
+                    } else {
+                        alert("টাস্ক সফল হয়নি। পুনরায় চেষ্টা করুন।");
+                    }
                 }
             }, 1000);
         };
@@ -266,29 +282,42 @@
             btn.classList.add('nav-active');
         };
 
+        // --- Withdraw System with 15 Refer Limit ---
         document.getElementById('withdraw-btn').onclick = async () => {
-            if((userData.totalRefer || 0) < 5) {
-                alert("দুঃখিত! উইথড্র করতে কমপক্ষে ৫টি রেফার প্রয়োজন।");
+            const currentRefers = userData.totalRefer || 0;
+            
+            // ১৫ রেফার চেক
+            if(currentRefers < 15) {
+                alert(`দুঃখিত! উইথড্র করতে কমপক্ষে ১৫টি রেফার প্রয়োজন। আপনার বর্তমান রেফার: ${currentRefers}`);
                 return;
             }
+
             const amt = parseFloat(document.getElementById('withdraw-amount').value);
             const num = document.getElementById('payment-number').value;
             const method = document.getElementById('withdraw-method').value;
-            if(!amt || amt < 500 || amt > userData.balance) return alert("সঠিক পরিমাণ দিন (মিনিমাম ৫০০)!");
-            if(!num) return alert("নম্বর দিন!");
-            await updateDoc(doc(db, "users", userData.uid), { balance: increment(-amt) });
-            await addDoc(collection(db, "withdrawals"), { 
-                uid: userData.uid, 
-                name: userData.name, 
-                amount: amt, 
-                method: method, 
-                number: num, 
-                time: serverTimestamp() 
-            });
-            alert("সফল! আপনার উইথড্র রিকোয়েস্ট পাঠানো হয়েছে।");
+
+            if(!amt || amt < 500) return alert("মিনিমাম ৫০০ টাকা উইথড্র করতে হবে!");
+            if(amt > userData.balance) return alert("আপনার পর্যাপ্ত ব্যালেন্স নেই!");
+            if(!num || num.length < 10) return alert("সঠিক মোবাইল নম্বর দিন!");
+
+            try {
+                await updateDoc(doc(db, "users", userData.uid), { balance: increment(-amt) });
+                await addDoc(collection(db, "withdrawals"), { 
+                    uid: userData.uid, 
+                    name: userData.name, 
+                    amount: amt, 
+                    method: method, 
+                    number: num, 
+                    status: "Pending",
+                    time: serverTimestamp() 
+                });
+                alert("সফল! আপনার উইথড্র রিকোয়েস্ট পাঠানো হয়েছে। অ্যাডমিন চেক করে পেমেন্ট করে দেবে।");
+            } catch (e) {
+                alert("ত্রুটি হয়েছে! আবার চেষ্টা করুন।");
+            }
         };
 
         init();
     </script>
 </body>
-</html>
+    </html>
